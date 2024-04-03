@@ -5,6 +5,7 @@
 domain: ryio1010.github.io
 layout:
 - go.kubebuilder.io/v4
+multigroup: true
 projectName: namespace-controller
 repo: github.com/ryio1010/namespace-controller
 resources:
