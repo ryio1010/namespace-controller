@@ -59,14 +59,8 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if errors.IsNotFound(err) {
 			// when namespace is deleted
 			log.Log.Info("DeletedNamespace", "name", req.Name)
-
 			// send message to slack
-			message := &utilslack.MessageInfo{
-				Channel: "general",
-				Message: "Namespace " + req.Name + " is deleted",
-			}
-
-			if err := r.SlackClient.PostMessage(message); err != nil {
+			if err := r.SlackClient.PostMessage("Namespace " + req.Name + " is deleted"); err != nil {
 				return ctrl.Result{}, err
 			}
 
@@ -82,13 +76,8 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// when namespace is created
 	log.Log.Info("CreatedNamespace", "name", namespace.Name)
-
 	// send message to slack
-	message := &utilslack.MessageInfo{
-		Channel: "general",
-		Message: "Namespace " + namespace.Name + " is created",
-	}
-	if err := r.SlackClient.PostMessage(message); err != nil {
+	if err := r.SlackClient.PostMessage("Namespace " + namespace.Name + " is created"); err != nil {
 		return ctrl.Result{}, err
 	}
 

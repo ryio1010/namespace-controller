@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -32,8 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/ryio1010/namespace-controller/env"
 	"github.com/ryio1010/namespace-controller/internal/controller"
 	utilslack "github.com/ryio1010/namespace-controller/internal/slack"
+	envconfig "github.com/sethvargo/go-envconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -65,6 +68,15 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	ctx := context.Background()
+
+	// process env
+	var e env.Env
+	if err := envconfig.Process(ctx, &e); err != nil {
+		setupLog.Error(err, "unable to process env")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
@@ -89,9 +101,12 @@ func main() {
 	}
 
 	if err = (&controller.NamespaceReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		SlackClient: utilslack.NewClient(),
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		SlackClient: utilslack.NewClient(
+			e.SlackToken,
+			e.Channel,
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)

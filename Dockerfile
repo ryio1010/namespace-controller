@@ -13,6 +13,7 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/main.go cmd/main.go
+COPY env/ env/
 # COPY api/ api/
 COPY internal/controller/ internal/controller/
 COPY internal/slack/ internal/slack/

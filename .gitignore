@@ -26,3 +26,7 @@ Dockerfile.cross
 *~
 
 .tool-versions
+.env
+.envrc
+
+.sops.yaml

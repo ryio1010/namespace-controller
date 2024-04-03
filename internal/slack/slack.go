@@ -7,29 +7,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const (
-	slackToken = "token"
-)
-
 type Client struct {
 	*slack.Client
+	Channel string
 }
 
 // NewClient creates a new Slack client.
-func NewClient() *Client {
+func NewClient(token, channel string) *Client {
 	return &Client{
-		Client: slack.New(slackToken),
+		Client:  slack.New(token),
+		Channel: channel,
 	}
 }
 
-// MessageInfo represents a message to be sent to a Slack channel.
-type MessageInfo struct {
-	Channel string
-	Message string
-}
-
-func (c *Client) PostMessage(mi *MessageInfo) error {
-	log.Log.Info("SlackMessage", "message", fmt.Sprintf("Posting message to Slack channel: %s, message: %s", mi.Channel, mi.Message))
+func (c *Client) PostMessage(message string) error {
+	log.Log.Info("SlackMessage", "message", fmt.Sprintf("Posting message to Slack channel: %s, message: %s", c.Channel, message))
+	_, _, err := c.Client.PostMessage(c.Channel, slack.MsgOptionText(message, false))
+	if err != nil {
+		return fmt.Errorf("failed to post message to Slack channel: %w", err)
+	}
 
 	return nil
 }
