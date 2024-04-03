@@ -33,10 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	envconfig "github.com/sethvargo/go-envconfig"
+
+	namespacev1alpha1 "github.com/ryio1010/namespace-controller/api/namespace/v1alpha1"
 	"github.com/ryio1010/namespace-controller/env"
 	"github.com/ryio1010/namespace-controller/internal/controller"
+	namespacecontroller "github.com/ryio1010/namespace-controller/internal/controller/namespace"
 	utilslack "github.com/ryio1010/namespace-controller/internal/slack"
-	envconfig "github.com/sethvargo/go-envconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -48,6 +51,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(namespacev1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -82,7 +86,7 @@ func main() {
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "97777cda.ryio1010.github.io",
+		LeaderElectionID:       "namespace-controller-leader-election",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -109,6 +113,13 @@ func main() {
 		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
+		os.Exit(1)
+	}
+	if err = (&namespacecontroller.NotificationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Notification")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

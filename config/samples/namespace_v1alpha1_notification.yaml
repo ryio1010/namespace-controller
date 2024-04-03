@@ -1,0 +1,12 @@
+apiVersion: namespace.ryio1010.github.io/v1alpha1
+kind: Notification
+metadata:
+  labels:
+    app.kubernetes.io/name: notification
+    app.kubernetes.io/instance: notification-sample
+    app.kubernetes.io/part-of: namespace-controller
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: namespace-controller
+  name: notification-sample
+spec:
+  # TODO(user): Add fields here
