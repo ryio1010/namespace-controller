@@ -18,45 +18,139 @@ package namespace
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	namespacev1alpha1 "github.com/ryio1010/namespace-controller/api/namespace/v1alpha1"
+
+	utilslack "github.com/ryio1010/namespace-controller/internal/slack"
 )
+
+type NamespaceData struct {
+	Name string
+}
+
+func (nd *NamespaceData) ToString() string {
+	return fmt.Sprintf("Namespace: %s", nd.Name)
+
+}
 
 // NotificationReconciler reconciles a Notification object
 type NotificationReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme      *runtime.Scheme
+	SlackClient *utilslack.Client
 }
 
 //+kubebuilder:rbac:groups=namespace.ryio1010.github.io,resources=notifications,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=namespace.ryio1010.github.io,resources=notifications/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=namespace.ryio1010.github.io,resources=notifications/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Notification object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *NotificationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// 1. get namespace resource
+	var namespace corev1.Namespace
+	if err := r.Get(ctx, req.NamespacedName, &namespace); err != nil {
+		if errors.IsNotFound(err) {
+			// when namespace is deleted
+			log.Log.Info("Namespace is deleted", "Namespace", req.NamespacedName)
+
+			// get notification resource
+			var notificationList namespacev1alpha1.NotificationList
+			if err := r.List(ctx, &notificationList); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			namespace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: req.Name,
+				},
+			}
+
+			// slack通知
+			if err := r.notify(notificationList, &namespace); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// 2. notification resourceを取得
+	var notificationList namespacev1alpha1.NotificationList
+	if err := r.List(ctx, &notificationList); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// 3. slack通知
+	if err := r.notify(notificationList, &namespace); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NotificationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	startAt := time.Now()
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&namespacev1alpha1.Notification{}).
+		Watches(
+			&corev1.Namespace{},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					// remove the namespace which is already existed before the controller starts
+					return e.Object.GetCreationTimestamp().After(startAt)
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return !e.DeleteStateUnknown
+				},
+			})).
 		Complete(r)
+}
+
+func (r *NotificationReconciler) notify(notificationList namespacev1alpha1.NotificationList, namespace *corev1.Namespace) error {
+	for _, notification := range notificationList.Items {
+		log.Log.Info("Notification", "Channel", notification.Spec.Channel)
+		log.Log.Info("Notification", "IgnorePrefixes", notification.Spec.IgnorePrefixes)
+
+		// namespace名のprefixがignorePrefixesに含まれている場合は通知しない
+		for _, prefix := range notification.Spec.IgnorePrefixes {
+			if strings.Contains(namespace.Name, prefix) {
+				return nil
+			}
+		}
+
+		data := createNamespaceData(namespace)
+		if err := r.SlackClient.PostMessage(data.ToString(), notification.Spec.Channel); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createNamespaceData(namespace *corev1.Namespace) NamespaceData {
+	return NamespaceData{
+		Name: namespace.Name,
+	}
 }

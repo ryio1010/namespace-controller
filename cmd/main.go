@@ -37,10 +37,13 @@ import (
 
 	namespacev1alpha1 "github.com/ryio1010/namespace-controller/api/namespace/v1alpha1"
 	"github.com/ryio1010/namespace-controller/env"
-	"github.com/ryio1010/namespace-controller/internal/controller"
 	namespacecontroller "github.com/ryio1010/namespace-controller/internal/controller/namespace"
 	utilslack "github.com/ryio1010/namespace-controller/internal/slack"
 	//+kubebuilder:scaffold:imports
+)
+
+const (
+	controllerName = "notification-controller"
 )
 
 var (
@@ -86,7 +89,7 @@ func main() {
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "namespace-controller-leader-election",
+		LeaderElectionID:       controllerName + "-leader-election",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -104,20 +107,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.NamespaceReconciler{
+	if err = (&namespacecontroller.NotificationReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		SlackClient: utilslack.NewClient(
 			e.SlackToken,
-			e.Channel,
 		),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
-		os.Exit(1)
-	}
-	if err = (&namespacecontroller.NotificationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Notification")
 		os.Exit(1)

@@ -9,4 +9,6 @@ metadata:
     app.kubernetes.io/created-by: namespace-controller
   name: notification-sample
 spec:
-  # TODO(user): Add fields here
+  channel: "#channel"
+  ignorePrefixes:
+    - "ignore"

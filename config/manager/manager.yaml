@@ -105,7 +105,5 @@ spec:
             secretKeyRef:
               name: slack-token
               key: token
-        - name: SLACK_CHANNEL
-          value: "#times_iwahara"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

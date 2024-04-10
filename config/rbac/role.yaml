@@ -9,6 +9,14 @@ rules:
   resources:
   - namespaces
   verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - namespace.ryio1010.github.io
+  resources:
+  - notifications
+  verbs:
   - create
   - delete
   - get
@@ -17,15 +25,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - namespace.ryio1010.github.io
   resources:
-  - namespaces/finalizers
+  - notifications/finalizers
   verbs:
   - update
 - apiGroups:
-  - ""
+  - namespace.ryio1010.github.io
   resources:
-  - namespaces/status
+  - notifications/status
   verbs:
   - get
   - patch
