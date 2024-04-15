@@ -23,8 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -63,43 +61,16 @@ type NotificationReconciler struct {
 func (r *NotificationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// 1. get namespace resource
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, req.NamespacedName, &namespace); err != nil {
-		if errors.IsNotFound(err) {
-			// when namespace is deleted
-			log.Log.Info("Namespace is deleted", "Namespace", req.NamespacedName)
-
-			// get notification resource
-			var notificationList namespacev1alpha1.NotificationList
-			if err := r.List(ctx, &notificationList); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			namespace := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: req.Name,
-				},
-			}
-
-			// slack通知
-			if err := r.notify(notificationList, &namespace); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, nil
-		}
-
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// 2. notification resourceを取得
 	var notificationList namespacev1alpha1.NotificationList
 	if err := r.List(ctx, &notificationList); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 3. slack通知
 	if err := r.notify(notificationList, &namespace); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -130,10 +101,7 @@ func (r *NotificationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *NotificationReconciler) notify(notificationList namespacev1alpha1.NotificationList, namespace *corev1.Namespace) error {
 	for _, notification := range notificationList.Items {
-		log.Log.Info("Notification", "Channel", notification.Spec.Channel)
-		log.Log.Info("Notification", "IgnorePrefixes", notification.Spec.IgnorePrefixes)
-
-		// namespace名のprefixがignorePrefixesに含まれている場合は通知しない
+		// if the prefix of the namespace name is included in ignorePrefixes, do not notify
 		for _, prefix := range notification.Spec.IgnorePrefixes {
 			if strings.Contains(namespace.Name, prefix) {
 				return nil
