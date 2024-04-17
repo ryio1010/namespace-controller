@@ -19,9 +19,9 @@ package namespace
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -63,7 +63,12 @@ func (r *NotificationReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, req.NamespacedName, &namespace); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if err := client.IgnoreNotFound(err); err != nil {
+			// if the namespace is not found(deleted), do nothing
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, err
 	}
 
 	var notificationList namespacev1alpha1.NotificationList
@@ -102,10 +107,8 @@ func (r *NotificationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *NotificationReconciler) notify(notificationList namespacev1alpha1.NotificationList, namespace *corev1.Namespace) error {
 	for _, notification := range notificationList.Items {
 		// if the prefix of the namespace name is included in ignorePrefixes, do not notify
-		for _, prefix := range notification.Spec.IgnorePrefixes {
-			if strings.Contains(namespace.Name, prefix) {
-				return nil
-			}
+		if slices.Contains(notification.Spec.IgnorePrefixes, namespace.Name) {
+			return nil
 		}
 
 		data := createNamespaceData(namespace)
